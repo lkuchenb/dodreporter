@@ -20,11 +20,78 @@
 
 import configparser
 import re
+from dataclasses import dataclass, field
 
 from dodreporter.error import DODReporterError, DODReporterConfigError
 
+####################################################################################################
+
 def is_email(s):
+    """Validates whether a string could be a valid email address"""
     return bool(re.match(r"[^@]+@[^@]+\.[^@]+", s))
+
+####################################################################################################
+
+@dataclass
+class DODGlobalSettings:
+    """Global settings"""
+    recipients : list
+    initial_wait : int = 0
+    smtp_host : str = None
+    smtp_port : int = None
+    smtp_user : str = None
+    smtp_pass : str = None
+    smtp_no_tls : bool = False
+    crypt_dirs : list  = field(default_factory=list)
+
+    def __init__(self, config : configparser.ConfigParser):
+        """Construct a DODGlobalSettings from a ConfigParser object"""
+        general = config['General']
+        # Mandatory
+        self.recipients = str(general['recipients']).split(',')
+        # Optional
+        self.initial_wait = general.getint('initialwait', 0)
+        self.smtp_host    = general.get('smtphost', 'localhost')
+        self.smtp_port    = general.get('smtpport', '25')
+        self.smtp_user    = general.get('smtpuser', None)
+        self.smtp_pass    = general.get('smtppass', None)
+        self.smtp_no_tls  = general.getboolean('smtpno_tls', False)
+        self.crypt_dirs   = general.get('cryptdirs', None).split(',') if general.get('cryptdirs', None) else []
+
+        for email in self.recipients:
+            if not is_email(email):
+                raise DODReporterConfigError(f"Cannot parse email address in global recipients: '{email}'")
+
+####################################################################################################
+
+@dataclass
+class DODHostSettings:
+    """Per host settings"""
+
+    name       : str
+    directory  : str
+    recipients : list
+
+    def __init__(self, config : configparser.ConfigParser, section_name : str):
+        self.name = section_name
+        host = config[self.name]
+        # Mandatory
+        self.directory = host['Directory']
+        self.recipients = host['Recipients'].split(',')
+
+        for email in self.recipients:
+            if not is_email(email):
+                raise DODReporterConfigError(f"Cannot parse email address in global recipients: '{email}'")
+
+####################################################################################################
+
+@dataclass
+class DODSettings:
+    """DOD runtime settings"""
+    global_settings : DODGlobalSettings
+    host_settings   : list
+
+####################################################################################################
 
 def get_config():
     configfile = configparser.ConfigParser()
@@ -33,19 +100,20 @@ def get_config():
     # Validate 'General' section
     if "General" not in configfile:
         raise DODReporterConfigError("'General' section is missing in the config file.")
-    if "Recipients" not in configfile['General']:
-        raise DODReporterConfigError("'General' section is missing 'Recipients' attribute.")
-    for email in configfile['General']['Recipients'].split(','):
-        if not is_email(email):
-            raise DODReporterConfigError(f"Cannot parse email address in config file: {email}")
+    try:
+        settings = DODSettings(
+                global_settings = DODGlobalSettings(configfile),
+                host_settings = []
+                )
+    except KeyError as e:
+        raise DODReporterConfigError(f"Missing global configuration key: {e}")
 
     # Validate host sections
     for section in configfile.sections():
-        if section == "General":
-            continue
+        if section != "General":
+            try:
+                settings.host_settings.append(DODHostSettings(configfile, section))
+            except KeyError as e:
+                raise DODReporterConfigError(f"Missing configuration key {e} in section '{section}'")
 
-        for req_host_key in ["Recipients", "Directory"]:
-            if req_host_key not in configfile[section]:
-                raise DODReporterConfigError(f"Missing config key '{req_host_key}' in section '{section}'")
-
-    return configfile
+    return settings
