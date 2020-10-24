@@ -23,6 +23,7 @@ import time
 import threading
 import signal
 import os
+import socket
 
 ####################################################################################################
 
@@ -34,7 +35,10 @@ from dodreporter import config, log, SMTPClient
 class DODCryptRunner(threading.Thread):
 
     def notify_crypt_unavailable(self, paths):
-        pass
+        self.reporter.smtp_send(
+                recipients = self.reporter.config.global_settings.recipients,
+                subject = f"[BACKUP][{socket.gethostname()}] Filesystem decryption",
+                message_text = "Please decrypt the filesystem.")
 
     def notify_crypt_available(self):
         pass
@@ -111,11 +115,15 @@ class DODReporter:
         for t in self.threads:
             t.join()
 
-    def smtp_send(*args):
-        with smtp_lock:
-            self.smtp_client.send_message(*args)
+    def smtp_send(self, *args, **kwargs):
+        with self.smtp_lock:
+            self.smtp_client.sendMessage(
+                    sender = self.config.global_settings.smtp_from,
+                    *args,
+                    **kwargs)
 
     def __init__(self, config):
+        self.config = config
         gs = config.global_settings
 
         # Set up smtp client

@@ -21,14 +21,9 @@
 import configparser
 import re
 from dataclasses import dataclass, field
+from email.utils import parseaddr
 
 from dodreporter.error import DODReporterError, DODReporterConfigError
-
-####################################################################################################
-
-def is_email(s):
-    """Validates whether a string could be a valid email address"""
-    return bool(re.match(r"[^@]+@[^@]+\.[^@]+", s))
 
 ####################################################################################################
 
@@ -36,6 +31,7 @@ def is_email(s):
 class DODGlobalSettings:
     """Global settings"""
     recipients : list
+    smtp_from : str
     initial_wait : int = 0
     smtp_host : str = None
     smtp_port : int = None
@@ -48,7 +44,8 @@ class DODGlobalSettings:
         """Construct a DODGlobalSettings from a ConfigParser object"""
         general = config['General']
         # Mandatory
-        self.recipients = str(general['recipients']).split(',')
+        self.recipients = [ parseaddr(addr) for addr in str(general['recipients']).split(',') ]
+        self.smtp_from  = parseaddr(str(general['smtpfrom']))
         # Optional
         self.initial_wait = general.getint('initialwait', 0)
         self.smtp_host    = general.get('smtphost', 'localhost')
@@ -58,8 +55,12 @@ class DODGlobalSettings:
         self.smtp_no_tls  = general.getboolean('smtpno_tls', False)
         self.crypt_dirs   = general.get('cryptdirs', None).split(',') if general.get('cryptdirs', None) else []
 
+        if self.smtp_from == ('',''):
+            s = general['smtpfrom']
+            raise DODReporterConfigError(f"Cannot parse email address '{s}'")
+
         for email in self.recipients:
-            if not is_email(email):
+            if email == ('',''):
                 raise DODReporterConfigError(f"Cannot parse email address in global recipients: '{email}'")
 
 ####################################################################################################
@@ -77,10 +78,10 @@ class DODHostSettings:
         host = config[self.name]
         # Mandatory
         self.directory = host['Directory']
-        self.recipients = host['Recipients'].split(',')
+        self.recipients = [ parseaddr(addr) for addr in host['Recipients'].split(',') ]
 
         for email in self.recipients:
-            if not is_email(email):
+            if email == ('',''):
                 raise DODReporterConfigError(f"Cannot parse email address in global recipients: '{email}'")
 
 ####################################################################################################
