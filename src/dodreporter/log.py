@@ -25,4 +25,4 @@ stderr_lock = Lock()
 
 def log(*args):
     with stderr_lock:
-        print(*args, file = sys.stderr)
+        print(*args, file = sys.stderr, flush = True)

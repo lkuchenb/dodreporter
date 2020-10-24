@@ -37,11 +37,22 @@ class DODCryptRunner(threading.Thread):
     def notify_crypt_unavailable(self, paths):
         self.reporter.smtp_send(
                 recipients = self.reporter.config.global_settings.recipients,
-                subject = f"[BACKUP][{socket.gethostname()}] Filesystem decryption",
-                message_text = "Please decrypt the filesystem.")
+                subject = f"[BACKUP][{socket.gethostname()}] ⚠️ Filesystem decryption required",
+                message_text = f"""Dear user,
+
+the backup server '{socket.gethostname()}' was recently restarted. To enable
+automated backups, please unlock the backup filesystem using the key device.
+                """)
 
     def notify_crypt_available(self):
-        pass
+        self.reporter.smtp_send(
+                recipients = self.reporter.config.global_settings.recipients,
+                subject = f"[BACKUP][{socket.gethostname()}] 👌 Filesystem decryption complete.",
+                message_text = f"""Dear user,
+
+the backup filesystems on the backup server '{socket.gethostname()}' are now
+available and ready to use.
+                """)
 
     def __init__(self, settings : config.DODSettings, reporter):
         threading.Thread.__init__(self)
@@ -77,6 +88,7 @@ class DODCryptRunner(threading.Thread):
             failed_paths = self.check()
             if not failed_paths:
                 log.log("[crypt_run] All crypt paths are available. Crypt runner terminating.")
+                self.notify_crypt_available()
                 return
             else:
                 if not self.failmail:
