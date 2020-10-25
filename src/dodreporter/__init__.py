@@ -20,96 +20,16 @@
 
 import sys
 import time
-import threading
 import signal
 import os
-import socket
+import threading
 
 ####################################################################################################
 
 from dodreporter.error import DODReporterConfigError, DODReporterError
 from dodreporter import config, log, SMTPClient
-
-####################################################################################################
-
-class DODCryptRunner(threading.Thread):
-
-    def notify_crypt_unavailable(self, paths):
-        self.reporter.smtp_send(
-                recipients = self.reporter.config.global_settings.recipients,
-                subject = f"[BACKUP][{socket.gethostname()}] ⚠️ Filesystem decryption required",
-                message_text = f"""Dear user,
-
-the backup server '{socket.gethostname()}' was recently restarted. To enable
-automated backups, please unlock the backup filesystem using the key device.
-                """)
-
-    def notify_crypt_available(self):
-        self.reporter.smtp_send(
-                recipients = self.reporter.config.global_settings.recipients,
-                subject = f"[BACKUP][{socket.gethostname()}] 👌 Filesystem decryption complete.",
-                message_text = f"""Dear user,
-
-the backup filesystems on the backup server '{socket.gethostname()}' are now
-available and ready to use.
-                """)
-
-    def __init__(self, settings : config.DODSettings, reporter):
-        threading.Thread.__init__(self)
-        self.enabled           = True
-        self.paths             = settings.global_settings.crypt_dirs
-        self.failmail          = False
-        self.last_status       = None
-        self.reporter          = reporter
-
-    def check(self):
-        status = [ os.path.exists(p) for p in self.paths ]
-
-        # Log current state if it has changed from the previous observed state
-        if status != self.last_status:
-            for path, exists in zip(self.paths, status):
-                if exists:
-                    log.log(f"[crypt_run] Crypt path '{path}' exists.")
-                else:
-                    log.log(f"[crypt_run] Crypt path '{path}' does not exist.")
-
-        # Keep in mind last state for future checks
-        self.last_status = status
-
-        # Return all missing paths
-        return [ path for path, exists in zip(self.paths, status) if not exists ]
-
-    def run(self):
-        if not self.paths:
-            log.log("[crypt_run] Crypt runner not starting up, no crypt dir paths configured.")
-            return
-        log.log("[crypt_run] Crypt runner started.")
-        while not self.reporter.terminate_event.is_set():
-            failed_paths = self.check()
-            if not failed_paths:
-                log.log("[crypt_run] All crypt paths are available. Crypt runner terminating.")
-                self.notify_crypt_available()
-                return
-            else:
-                if not self.failmail:
-                    log.log("[crypt_run] Missing crypt paths. Sending out email notification.")
-                    self.notify_crypt_unavailable(failed_paths)
-                    self.failmail = True
-            self.reporter.terminate_event.wait(3)
-
-####################################################################################################
-
-class DODHostRunner(threading.Thread):
-
-    def __init__(self, settings : config.DODSettings, reporter):
-        threading.Thread.__init__(self)
-        self.reporter = reporter
-
-    def run(self):
-        log.log("[host_run] Host runner started.")
-        while not self.reporter.terminate_event.is_set():
-            self.reporter.terminate_event.wait(3)
-        pass
+from dodreporter.runners import DODCryptRunner
+from dodreporter.runners import DODHostRunner
 
 ####################################################################################################
 
@@ -172,9 +92,9 @@ def main(argv=sys.argv):
         sys.exit(2)
     except KeyboardInterrupt:
         dod.terminate()
-    except Exception as e:
-        print(f'\nUnknown error: {e}')
-        sys.exit(9)
-
+#    except Exception as e:
+#        print(f'\nUnknown error: {e}')
+#        sys.exit(9)
+#
     log.log(f'\nShutting down DOD reporter.')
     sys.exit(0)
