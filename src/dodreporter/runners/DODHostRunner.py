@@ -23,12 +23,22 @@ import threading
 from dodreporter import config, log
 
 class DODHostRunner(threading.Thread):
+    """Runner that periodically checks recent backups.
 
-    def __init__(self, settings : config.DODSettings, reporter):
+    TO BE IMPLEMENTED"""
+
+    def __init__(self, reporter):
+        """Construct a new DODHostRunner object.
+        
+        Parameters:
+        reporter: The managing DODReporter instance"""
+
         threading.Thread.__init__(self)
         self.reporter = reporter
 
     def run(self):
+        """Overrides Thread.run()."""
+
         log.log("[host_run] Host runner started.")
         while not self.reporter.terminate_event.is_set():
             self.reporter.terminate_event.wait(3)

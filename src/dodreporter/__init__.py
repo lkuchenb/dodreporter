@@ -34,20 +34,28 @@ from dodreporter.runners import DODHostRunner
 ####################################################################################################
 
 class DODReporter:
+    """Encapsulates the DOD reporter runtime logic."""
 
     terminate_event = threading.Event()
     smtp_lock       = threading.Lock()
 
     def terminate(self):
+        """Terminate the runner threads by triggering the terminate event."""
+
         self.terminate_event.set()
         for t in self.threads:
             t.join()
 
     def join(self):
+        """Join all runner threads."""
+
         for t in self.threads:
             t.join()
 
     def smtp_send(self, *args, **kwargs):
+        """Wrapper for SMTPClient.sendMessage() that sets the sender address
+        configured in the global settings."""
+
         with self.smtp_lock:
             self.smtp_client.sendMessage(
                     sender = self.config.global_settings.smtp_from,
@@ -55,6 +63,11 @@ class DODReporter:
                     **kwargs)
 
     def __init__(self, config):
+        """Construct a new DODReporter instance.
+
+        Parameters:
+        config: The global runtime configuration"""
+
         self.config = config
         gs = config.global_settings
 
@@ -68,8 +81,8 @@ class DODReporter:
 
         # Set up runner threads
         self.threads = [
-                DODCryptRunner(config, self),
-                DODHostRunner(config, self)
+                DODCryptRunner(self),
+                DODHostRunner(self)
                 ]
 
         # Start runner threads
@@ -79,6 +92,7 @@ class DODReporter:
 ####################################################################################################
 
 def main(argv=sys.argv):
+    """Main function for the dod_reporter entry point."""
     try:
         cfg = config.get_config()
         dod = DODReporter(cfg)

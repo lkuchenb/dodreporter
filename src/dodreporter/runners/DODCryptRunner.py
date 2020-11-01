@@ -25,8 +25,17 @@ import socket
 from dodreporter import config, log
 
 class DODCryptRunner(threading.Thread):
+    """Runner that is launched once initially to check whether encrypted
+    volumes are available and that terminates once they are. The runner
+    notifies the configured recipients initially if the encrypted volumes are
+    unavailable and when they become available."""
 
     def notify_crypt_unavailable(self, paths):
+        """Send out a notification that encrypted volumes are unavailable.
+
+        Parameters:
+        paths: A list of paths that were checked and were not available"""
+
         self.reporter.smtp_send(
                 recipients = self.reporter.config.global_settings.recipients,
                 subject = f"[BACKUP][{socket.gethostname()}] ⚠️ Filesystem decryption required",
@@ -37,6 +46,7 @@ automated backups, please unlock the backup filesystem using the key device.
                 """)
 
     def notify_crypt_available(self):
+        """Send out a notification that encrypted volumes are available."""
         self.reporter.smtp_send(
                 recipients = self.reporter.config.global_settings.recipients,
                 subject = f"[BACKUP][{socket.gethostname()}] 👌 Filesystem decryption complete.",
@@ -46,15 +56,22 @@ the backup filesystems on the backup server '{socket.gethostname()}' are now
 available and ready to use.
                 """)
 
-    def __init__(self, settings : config.DODSettings, reporter):
+    def __init__(self, reporter):
+        """Constructs a new DODCryptRunner object.
+
+        Parameters:
+        reporter: The managing DODReporter instance"""
+
         threading.Thread.__init__(self)
         self.enabled           = True
-        self.paths             = settings.global_settings.crypt_dirs
+        self.paths             = reporter.config.global_settings.crypt_dirs
         self.failmail          = False
         self.last_status       = None
         self.reporter          = reporter
 
     def check(self):
+        """Run the periodical check for encrypted volumes."""
+
         status = [ os.path.exists(p) for p in self.paths ]
 
         # Log current state if it has changed from the previous observed state
@@ -72,6 +89,10 @@ available and ready to use.
         return [ path for path, exists in zip(self.paths, status) if not exists ]
 
     def run(self):
+        """Overrides Thread.run(). Runs check() and evaluates result every 3
+        seconds until all volumes became available or the DODRepoter terminate
+        event occurs."""
+
         if not self.paths:
             log.log("[crypt_run] Crypt runner not starting up, no crypt dir paths configured.")
             return
