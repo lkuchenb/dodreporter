@@ -18,6 +18,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+####################################################################################################
+
 import sys
 import time
 import signal
@@ -80,10 +82,7 @@ class DODReporter:
                 tls      = not gs.smtp_no_tls)
 
         # Set up runner threads
-        self.threads = [
-                DODCryptRunner(self),
-                DODHostRunner(self)
-                ]
+        self.threads = [ DODCryptRunner(self) ] + [ DODHostRunner(self, host_setting.name) for host_setting in config.host_settings ]
 
         # Start runner threads
         for t in self.threads:
